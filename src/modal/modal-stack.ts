@@ -81,6 +81,47 @@ export class NgbModalStack {
     return ngbModalRef;
   }
 
+  openInParent(moduleCFR: ComponentFactoryResolver, contentInjector: Injector, content: any, options): NgbModalRef {
+    const containerEl = window.frameElement.parentNode.parentNode.parentNode;
+    const renderer = this._rendererFactory.createRenderer(null, null);
+
+    const revertPaddingForScrollBar = this._scrollBar.compensate();
+    const removeBodyClass = () => {
+      if (!this._modalRefs.length) {
+        renderer.removeClass(this._document.body, 'modal-open');
+      }
+    };
+
+    if (!containerEl) {
+      throw new Error(`The specified modal container "${options.container || 'body'}" was not found in the DOM.`);
+    }
+
+    const activeModal = new NgbActiveModal();
+    const contentRef = this._getContentRef(moduleCFR, options.injector || contentInjector, content, activeModal);
+
+    let backdropCmptRef: ComponentRef<NgbModalBackdrop> =
+        options.backdrop !== false ? this._attachBackdrop(moduleCFR, containerEl) : null;
+    let windowCmptRef: ComponentRef<NgbModalWindow> = this._attachWindowComponent(moduleCFR, containerEl, contentRef);
+    let ngbModalRef: NgbModalRef = new NgbModalRef(windowCmptRef, contentRef, backdropCmptRef, options.beforeDismiss);
+
+    this._registerModalRef(ngbModalRef);
+    this._registerWindowCmpt(windowCmptRef);
+    ngbModalRef.result.then(revertPaddingForScrollBar, revertPaddingForScrollBar);
+    ngbModalRef.result.then(removeBodyClass, removeBodyClass);
+    activeModal.close = (result: any) => { ngbModalRef.close(result); };
+    activeModal.dismiss = (reason: any) => { ngbModalRef.dismiss(reason); };
+
+    this._applyWindowOptions(windowCmptRef.instance, options);
+    if (this._modalRefs.length === 1) {
+      renderer.addClass(this._document.body, 'modal-open');
+    }
+
+    if (backdropCmptRef && backdropCmptRef.instance) {
+      this._applyBackdropOptions(backdropCmptRef.instance, options);
+    }
+    return ngbModalRef;
+  }
+
   dismissAll(reason?: any) { this._modalRefs.forEach(ngbModalRef => ngbModalRef.dismiss(reason)); }
 
   private _attachBackdrop(moduleCFR: ComponentFactoryResolver, containerEl: any): ComponentRef<NgbModalBackdrop> {
